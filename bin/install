@@ -1,0 +1,187 @@
+#!/bin/bash
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+sudo mkdir -p /talus/data /var/log/talus/apache2
+sudo groupadd talus
+sudo useradd -M talus -g talus
+
+sudo mkdir -p /talus/install
+
+sudo cp $DIR/../../slave/vm/prebootstrap.py /talus/install/
+cat << EOF | sudo tee /talus/install/IMAGE_SETUP_README.txt > /dev/null
+Requirements:
+=============
+
+All:
+----
+* install drivers that can be found in the mounted CDROM
+* auto-login
+* prebootstrap.py set to run on login
+* numpy
+* turn off auto-updates (you want your base image to be clean w/ no updates!)
+* python lxml module
+* any other python modules/dependencies that need to be compiled or
+	installed via an installer
+
+Windows:
+--------
+Install Windows use the username user and the password password.
+Set to Autologin
+
+1. Install python https://www.python.org/downloads/windows/
+2. Download prebuilt lxml from http://www.lfd.uci.edu/~gohlke/pythonlibs/#lxml
+pip install lxml-3.6.4-cp27-cp27m-win_amd64.whl
+3. pip install requests comtypes pymongo
+4. Install WinDBG by Downloading the Windows 10 SDK
+https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk
+If you want to download only Debugging Tools for Windows, install the Windows SDK, and, during the installation, select the Debugging Tools for Windows box and clear all the other boxes.
+5. Download and extract !exploitable from https://msecdbg.codeplex.com/
+Copy x86 msdec.dll to c:\Program Files (x86)\Windows Kits\10\Debuggers\x86\winext
+Copy x64 msdec.dll to c:\Program Files (x86)\Windows Kits\10\Debuggers\x64\winext
+6. Launch command prompt as Administrator.
+  Type netplwiz
+  Select user
+  Disable Users must enter a username and password to use this computer.
+
+* Windbg
+* potentially pre-generated fastoche comtypes python files
+* VCREDIST 2012 x86 AND x64 (for windbg msec.dll)
+* msec.dll in the winext folder of both x86 and x64 windbgs
+* psexec (all pstools?)
+* git clone https://github.com/iidx/pycdb.git
+cd pycdb
+python ./setup.py install
+
+Be sure to do the following:
+
+* turn off UAC
+
+You must also configure WINRM by doing (in an Administrator cmd.exe):
+
+	winrm quickconfig -q
+	winrm set winrm/config/winrs @{MaxMemoryPerShellMB="512"}
+	winrm set winrm/config @{MaxTimeoutms="1800000"}
+	winrm set winrm/config/service @{AllowUnencrypted="true"}
+	winrm set winrm/config/service/auth @{Basic="true"}
+	sc config WinRM start= auto
+
+Also note that all created networks in the VM must be set the “Work”
+network. This can be set to be the default action by going to:
+
+	Open "gpedit.msc" -> Go to Computer Configuration –> Windows Settings –> Security Settings –> Network list manager
+
+It may also help to attempt to shrink the size of the VM using sdelete
+
+	sdelete -z C:
+
+Linux:
+------
+
+Make sure the following are installed:
+
+* sudo apt-get install -y python python-pip vim git llvm lldb openssh-server
+
+pip install requests
+pip install comtypes
+pip install lxml
+
+Be sure to do the following:
+
+* passwordless sudo
+sudo visudo and add the following:
+ALL            ALL = (ALL) NOPASSWD: ALL
+
+
+Prebootstrap.py
+===============
+You must put the prebootstrap.py file found here onto the VM and set it
+to run on login. The prebootstrap.py script will wait for a file named
+RUN_TALUS_RUN to appear in the system's temporary directory, at which
+point it will import and run the bootstrap (and hence your jobs).
+
+gl;hf
+-d0c
+EOF
+sudo chown talus:talus /talus/install
+sudo chmod -R g+ws /talus/install
+
+mkdir -p /tmp/talus/tmp
+chmod -R o+rws /tmp/talus/tmp
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+sudo apt-get install -y \
+	libvirt-bin \
+	qemu-kvm \
+	virtinst \
+	python-libvirt \
+	qemu-utils \
+	libxslt-dev \
+	libxml2-dev \
+	libvirt-dev \
+	libxml2-dev \
+	libdevmapper-dev \
+	libnl-dev \
+	libffi-dev \
+	build-essential \
+	ruby-dev \
+	python-pip \
+	python-dev \
+	libyajl* \
+	wget \
+	gcc make pkg-config libxml2-dev libgnutls-dev libdevmapper-dev libcurl4-gnutls-dev python-dev libpciaccess-dev libxen-dev libnl-dev libyajl-dev uuid-dev libpcap-dev xsltproc
+
+(mkdir -p /tmp/vagrant_install \
+	&& cd /tmp/vagrant_install \
+	&& wget https://releases.hashicorp.com/vagrant/1.8.5/vagrant_1.8.5_x86_64.deb \
+	&& sudo dpkg -i vagrant_1.8.5_x86_64.deb \
+	&& rm -rf /tmp/vagrant_install)
+
+vagrant plugin install vagrant-libvirt
+sudo pip install tabulate xmltodict mongoengine mock pymongo==2.8.0 sh pika docutils netifaces pip2pi
+
+$DIR/bin/install_vagrant
+
+sudo pip install --upgrade pip
+sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi
+
+echo "USER INPUT" 
+echo "USER INPUT" 
+echo "USER INPUT" 
+echo ""
+echo 
+read -p "through which interface does the master interact with the slaves?" intf
+
+if [[ `systemctl` =~ -\.mount ]]; then
+echo "Installing talus-db as systemd service"
+cat << EOF | sudo tee /etc/systemd/system/talus-master.service > /dev/null
+[Unit]
+Description=Talus DB Container
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStart=$(readlink -f $DIR)/start_raw $intf
+
+ExecStop=$(readlink -f $DIR)/stop_raw
+[Install]
+WantedBy=default.target
+EOF
+
+else
+
+cat << EOF | sudo tee /etc/init/talus-master.conf > /dev/null
+description "Talus Master Daemon"
+author		"Optiv Labs"
+start on filesystem or runlevel [2345]
+stop on shutdown
+respawn
+script
+	$(readlink -f $DIR)/start_raw $intf
+end script
+EOF
+fi
+
+sudo $DIR/init_repo

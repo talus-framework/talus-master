@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "stopping temporary amqp container (talus-master)"
+
+sudo docker kill talus-master || true
