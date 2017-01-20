@@ -9,11 +9,12 @@ import sys
 import time
 import uuid
 
-logging.getLogger("sh").setLevel(logging.WARN)
-
 import master.models
 from master.lib.vm.manage import VMManager
 from master.watchers import WatcherBase
+
+logging.getLogger("sh").setLevel(logging.WARN)
+
 
 class VMWatcher(WatcherBase):
     collection = "talus.image"
@@ -35,11 +36,11 @@ class VMWatcher(WatcherBase):
         self._log.debug("handling update")
 
         self._handle_status(id, mod)
-    
+
     def delete(self, id):
         self._log.debug("handling delete")
 
-        #self._handle_status(id)
+        # self._handle_status(id)
 
     # -----------------------
 
@@ -49,10 +50,10 @@ class VMWatcher(WatcherBase):
 
     def _handle_status(self, id_, obj=None, image=None):
         switch = {
-            "import":        self._handle_import,
-            "configure":    self._handle_configure,
-            "create":        self._handle_create,
-            "delete":        self._handle_delete
+            "import": self._handle_import,
+            "configure": self._handle_configure,
+            "create": self._handle_create,
+            "delete": self._handle_delete
         }
 
         if image is None:
@@ -63,7 +64,7 @@ class VMWatcher(WatcherBase):
 
         if image.status["name"] in switch:
             switch[image.status["name"]](id_, image)
-    
+
     def _get_running_vms(self):
         vms = []
         for worker in self._vm_manager._workers.values():
@@ -98,11 +99,11 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.import_image(
             image_path,
-            str(image.id), # image name
-            user_interaction    = True,
-            username            = image.username,
-            password            = image.password,
-            on_success            = self._set_image_ready
+            str(image.id),  # image name
+            user_interaction=True,
+            username=image.username,
+            password=image.password,
+            on_success=self._set_image_ready
         )
 
         from master import Master
@@ -119,7 +120,7 @@ class VMWatcher(WatcherBase):
         image.save()
 
         self._log.info("image is imported and running, ready for initial configuration:\n\t{!r}".format(vnc_info))
-    
+
     def _handle_configure(self, id_, image):
         """Configure the image (spin it up, let the user muck around in it, commit all changes
         back into the original image)
@@ -137,10 +138,10 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.configure_image(
             str(image.id),
-            vagrantfile            = vagrantfile,
-            user_interaction    = user_interaction,
-            on_success            = self._set_image_ready,
-            kvm                    = image.status["kvm"]
+            vagrantfile=vagrantfile,
+            user_interaction=user_interaction,
+            on_success=self._set_image_ready,
+            kvm=image.status["kvm"]
         )
         self._log.debug("got vnc info from configure image: {!r}".format(vnc_info))
 
@@ -154,7 +155,7 @@ class VMWatcher(WatcherBase):
                 "vnc": vnc_info
             }
             image.save()
-    
+
     def _handle_create(self, id_, image):
         """Handle creating a new VM based on an existing VM
         """
@@ -167,10 +168,10 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.create_image(
             vagrantfile,
-            base_name            = str(base.id),
-            dest_name            = str(image.id),
-            user_interaction    = user_interaction,
-            on_success            = self._set_image_ready
+            base_name=str(base.id),
+            dest_name=str(image.id),
+            user_interaction=user_interaction,
+            on_success=self._set_image_ready
         )
 
         from master import Master
@@ -197,7 +198,7 @@ class VMWatcher(WatcherBase):
         else:
             self._vm_manager.delete_image(str(image.id))
             image.delete()
-    
+
     # -----------------------
 
     def _set_image_ready(self, image_name):
@@ -221,7 +222,8 @@ class VMWatcher(WatcherBase):
 
         path = "/var/lib/libvirt/images/{}_vagrant_box_image_0.img".format(str(image.id))
         if not os.path.exists(path):
-            path = os.path.join(os.path.expanduser("~"), ".vagrant.d", "boxes", str(image.id), "0", "libvirt", "box.img")
+            path = os.path.join(os.path.expanduser("~"), ".vagrant.d", "boxes", str(image.id), "0", "libvirt",
+                                "box.img")
 
         self._log.info("recalculating md5 of image found at {}".format(path))
 
@@ -229,7 +231,7 @@ class VMWatcher(WatcherBase):
             self._log.warn("Could not find valid path for image {} to update md5".format(str(image.id)))
             return
 
-        md5,_ = md5sum(path).split()
+        md5, _ = md5sum(path).split()
 
         self._log.info("new md5: {}".format(md5))
         image.md5 = md5

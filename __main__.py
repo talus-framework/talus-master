@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import master
+import argparse
 import sys
 
+import master
+
 if __name__ == "__main__":
-    intf = sys.argv[1]
-    master.main(intf)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('intf', type=str, help="Network interface")
+    args = parser.parse_args()
+
+    master.main(args.intf)

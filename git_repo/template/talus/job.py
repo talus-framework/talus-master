@@ -2,18 +2,19 @@
 # encoding: utf-8
 
 import ast
-import docutils
-import docutils.examples
 import inspect
 import logging
 import re
 
-logging.basicConfig(level=logging.DEBUG)
-
+import docutils
+import docutils.examples
 from talus.fileset import FileSet
 
+logging.basicConfig(level=logging.DEBUG)
 
-class TalusError(Exception): pass
+
+class TalusError(Exception):
+    pass
 
 
 class PyFuncTypeComponent(object):
@@ -268,7 +269,7 @@ class Job(object):
 
         elif param_type["type"] == "component":
             # val should be like this:
-            #	{ "class": "SpecificComponent", "params": {} }
+            # { "class": "SpecificComponent", "params": {} }
             #
             # allow for inheritance by letting the json specify the
             # specific class that will be used

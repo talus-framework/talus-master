@@ -17,6 +17,7 @@ try:
 except ImportError as e:
     crash_task_maker = None
 
+
 class CrashProcessor(processors.ResultProcessorBase):
     """A simple crash processor
     """
@@ -35,7 +36,7 @@ class CrashProcessor(processors.ResultProcessorBase):
             fs.delete(repro)
 
         result.delete()
-    
+
     def process(self, result):
         """Process the crash result
 
@@ -43,8 +44,10 @@ class CrashProcessor(processors.ResultProcessorBase):
         """
         self._log.info("processing crash")
 
-        if Result.objects(data__hash_major=result.data["hash_major"], data__hash_minor=result.data["hash_minor"]).count() > 50:
-            self._log.debug("removing unneeded crash result ({}:{} hash)".format(result.data["hash_major"], result.data["hash_minor"]))
+        if Result.objects(data__hash_major=result.data["hash_major"],
+                          data__hash_minor=result.data["hash_minor"]).count() > 50:
+            self._log.debug("removing unneeded crash result ({}:{} hash)".format(result.data["hash_major"],
+                                                                                 result.data["hash_minor"]))
             self.delete_result(result)
             return
 
@@ -64,7 +67,8 @@ class CrashProcessor(processors.ResultProcessorBase):
             self.delete_result(result)
             return
 
-        if Result.objects(data__hash_major=result.data["hash_major"], data__hash_minor=result.data["hash_minor"]).count() == 1:
+        if Result.objects(data__hash_major=result.data["hash_major"],
+                          data__hash_minor=result.data["hash_minor"]).count() == 1:
             try:
                 crash_task_maker.create_crash_task(result)
             except:
