@@ -111,7 +111,6 @@ chmod -R o+rws /tmp/talus/tmp
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
-<<<<<<< HEAD
 sudo apt-get install -y \
 	libvirt-bin \
 	qemu-kvm \
@@ -141,13 +140,11 @@ sudo apt-get install -y \
 
 vagrant plugin install vagrant-libvirt
 sudo pip install tabulate xmltodict mongoengine mock pymongo==2.8.0 sh pika docutils netifaces pip2pi
-=======
-$DIR/../../../bin/install_vagrant
+
+$DIR/bin/install_vagrant
 
 sudo pip install --upgrade pip
-#sudo pip install xmltodict mongoengine mock pymongo pika docutils netifaces pip2pi tabulate
 sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi
->>>>>>> 06feb30556e5b3f215439a059ea898da7708dc5c
 
 echo "USER INPUT" 
 echo "USER INPUT" 
