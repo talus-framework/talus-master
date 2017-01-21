@@ -12,7 +12,6 @@ import json
 import logging
 import netifaces
 import os
-import pymongo
 import signal
 import socket
 import sys
@@ -20,16 +19,18 @@ import threading
 import time
 
 import master.models
+import master.watchers
+import pymongo
+from master.lib.amqp_man import AmqpManager
+from master.lib.mongo_oplog_watcher import OplogWatcher
 from master.models import *
 from master.models import Master as MasterModel
-from master.lib.mongo_oplog_watcher import OplogWatcher, OplogPrinter
-from master.lib.amqp_man import AmqpManager
-import master.watchers
 
 logging.basicConfig(
     level=logging.DEBUG,
 )
 logging.getLogger().handlers[0].setFormatter(logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s"))
+
 
 def _signal_handler(signum, frame):
     """Shut down the running Master worker
@@ -42,12 +43,14 @@ def _signal_handler(signum, frame):
     print("handling signal")
     Master.instance().stop()
 
+
 def _install_sig_handlers():
     """Install signal handlers
     """
     print("installing signal handlers")
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
+
 
 class TalusDBWatcher(OplogWatcher):
     """A class to watch the mongodb for changes"""
@@ -64,18 +67,18 @@ class TalusDBWatcher(OplogWatcher):
         self._watchers = {}
 
         if parent_log is None:
-            self._log  = logging.getLogger("DB-WATCH")
+            self._log = logging.getLogger("DB-WATCH")
         else:
             self._log = parent_log.getChild("DB-WATCH")
-    
+
     def run(self):
         self._log.info("running")
         super(TalusDBWatcher, self).run()
 
-        for collection,watchers in self._watchers.iteritems():
+        for collection, watchers in self._watchers.iteritems():
             for watcher in watchers:
                 watcher.stop()
-    
+
     def stop(self):
         """Stop the database watcher
         :returns: TODO
@@ -83,10 +86,10 @@ class TalusDBWatcher(OplogWatcher):
         """
         self._log.info("stopping")
         self._running.clear()
-    
+
     def add_watcher(self, collection, watcher):
         self._watchers.setdefault(collection, []).append(watcher)
-    
+
     def insert(self, ns, ts, id, obj, raw, **kwargs):
         """Handle new insertions into the database
 
@@ -100,7 +103,7 @@ class TalusDBWatcher(OplogWatcher):
 
         """
         self._log.info("watched insert in {}: {}".format(ns, id))
-        #self._log.debug("received insert: {}".format(obj))
+        # self._log.debug("received insert: {}".format(obj))
 
         if ns in self._watchers:
             for watcher in self._watchers[ns]:
@@ -118,8 +121,8 @@ class TalusDBWatcher(OplogWatcher):
         :returns: TODO
 
         """
-        #self._log.info("update for {}:{}".format(ns, id))
-        ##self._log.debug("modification: {}".format(mod))
+        # self._log.info("update for {}:{}".format(ns, id))
+        # self._log.debug("modification: {}".format(mod))
 
         if ns in self._watchers:
             for watcher in self._watchers[ns]:
@@ -142,7 +145,10 @@ class TalusDBWatcher(OplogWatcher):
             for watcher in self._watchers[ns]:
                 watcher.delete(id)
 
+
 MASTER_INTF = None
+
+
 class Master(object):
     """The master class watches the database for changes, queues and handles amqp messages,
     and handles VM image conversions"""
@@ -183,7 +189,7 @@ class Master(object):
         self._running = threading.Event()
         self._watcher = None
         self._amqp_man = AmqpManager.instance()
-        
+
         self._intf = intf
         # TODO need a better way than just eth0
         self._ip = netifaces.ifaddresses(intf)[2][0]['addr']
@@ -204,7 +210,7 @@ class Master(object):
     # -------------------------
     # public functions
     # -------------------------
-    
+
     def run(self):
         """Run the master daemon
         :returns: TODO
@@ -220,7 +226,7 @@ class Master(object):
 
         # stupid GIL
         while self._watcher.is_alive():
-            self._watcher.join(2**32)
+            self._watcher.join(2 ** 32)
 
         self._shutdown_singletons()
 
@@ -234,7 +240,7 @@ class Master(object):
         self._log.info("stopping")
         self._running.clear()
         self._watcher.stop()
-    
+
     def handle_signal(self, sig, frame):
         """TODO: Docstring for handle_signal.
 
@@ -244,7 +250,7 @@ class Master(object):
 
         """
         self.stop()
-    
+
     # -------------------------
     # private functions
     # -------------------------
@@ -268,17 +274,17 @@ class Master(object):
             "fanout"
         )
         self._amqp_man.declare_queue(self.AMQP_SLAVE_QUEUE,
-            durable        = True,
-            auto_delete    = False,
-            exclusive    = False
-        )
+                                     durable=True,
+                                     auto_delete=False,
+                                     exclusive=False
+                                     )
         self._amqp_man.declare_queue(self.AMQP_SLAVE_STATUS_QUEUE,
-            durable        = True,
-            auto_delete    = False,
-            exclusive    = False
-        )
+                                     durable=True,
+                                     auto_delete=False,
+                                     exclusive=False
+                                     )
         self._amqp_man.consume_queue(self.AMQP_SLAVE_STATUS_QUEUE, self._on_slave_status)
-    
+
     def _on_slave_status(self, channel, method, props, body):
         """Slaves will respond to commands/queries via this queue. Slaves
         will also send an initial connection message via this queue
@@ -288,16 +294,16 @@ class Master(object):
 
         data = json.loads(body)
         switch = dict(
-            new            = self._handle_slave_new,
-            status        = self._handle_slave_status,
-            heartbeat    = self._handle_slave_heartbeat,
+            new=self._handle_slave_new,
+            status=self._handle_slave_status,
+            heartbeat=self._handle_slave_heartbeat,
         )
 
         if "type" not in data or data["type"] not in switch:
             self._log.warn("received slave data is in the wrong format")
         else:
             switch[data["type"]](data)
-    
+
     def _handle_slave_status(self, data):
         """Handle slave status messages"""
         if "uuid" not in data:
@@ -306,7 +312,7 @@ class Master(object):
             return
 
         uuid = data["uuid"]
-        #self._log.info("got slave status update message")
+        # self._log.info("got slave status update message")
 
         slaves = Slave.objects(uuid=uuid)
         if len(slaves) == 0:
@@ -325,14 +331,14 @@ class Master(object):
 
         slave.timestamps["modified"] = time.time()
         slave.save()
-    
+
     def _handle_slave_new(self, data):
         """Handle new slave messages"""
         self._log.info("handling new slave message: {}".format(data))
 
         # these must be unique
         Slave.objects(
-            #ip=data["ip"],
+            # ip=data["ip"],
             hostname=data["hostname"]
         ).delete()
 
@@ -346,20 +352,20 @@ class Master(object):
 
         self._amqp_man.queue_msg(
             json.dumps(dict(
-                type        = "config",
-                db            = self._ip,
-                code        = dict(
-                    loc        = "http://{}/code_cache".format(self._ip),
+                type="config",
+                db=self._ip,
+                code=dict(
+                    loc="http://{}/code_cache".format(self._ip),
 
                     # TODO put these in a config file
-                    username    = "talus_job",
-                    password    = "Monkeys eat bananas and poop all day."
+                    username="talus_job",
+                    password="Monkeys eat bananas and poop all day."
                 ),
-                image_url    = "http://{}/images/".format(self._ip)
+                image_url="http://{}/images/".format(self._ip)
             )),
             self.AMQP_SLAVE_QUEUE + "_" + slave.uuid
         )
-    
+
     def _handle_slave_heartbeat(self, data):
         """Handle slave heartbeats"""
         self._log.info("handling slave heartbeat: {}".format(data))
@@ -374,8 +380,8 @@ class Master(object):
 
         """
         self._watcher = TalusDBWatcher(
-            parent_log    = self._log,
-            connection    = pymongo.MongoClient(self._db_conn_info.split(":")[0], 27017)
+            parent_log=self._log,
+            connection=pymongo.MongoClient(self._db_conn_info.split(":")[0], 27017)
         )
         self._watcher.start()
 
@@ -387,7 +393,7 @@ class Master(object):
             mod_name = os.path.basename(filename).replace(".py", "")
             mod_base = __import__("master.watchers", globals(), locals(), fromlist=[mod_name])
             mod = getattr(mod_base, mod_name)
-            
+
             for name in dir(mod):
                 item = getattr(mod, name)
                 if type(item) is not type:
@@ -395,7 +401,8 @@ class Master(object):
                 if item != master.watchers.WatcherBase and issubclass(item, master.watchers.WatcherBase):
                     watcher = getattr(mod, name)(self._log)
                     self._watcher.add_watcher(watcher.collection, watcher)
-    
+
+
 def main(intf):
     global MASTER_INTF
     MASTER_INTF = intf
@@ -407,5 +414,6 @@ def main(intf):
 
     m.run()
 
+
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1])
