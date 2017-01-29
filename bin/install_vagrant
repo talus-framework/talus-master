@@ -8,7 +8,7 @@ echo "[!] If you received 'E: You must put some 'source' URIs in your sources.li
 echo "[!] edit /etc/apt/sources.list and uncomment the deb-src lines"
 
 sudo apt-get install -y qemu qemu-kvm virt-manager libvirt-bin ebtables dnsmasq \
-	libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev
+	libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev python-pip
 
 if [ ! -f /usr/bin/vagrant ]; then
 	mkdir -p /tmp/vagrant_install \

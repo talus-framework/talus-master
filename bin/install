@@ -8,7 +8,19 @@ sudo useradd -M talus -g talus
 
 sudo mkdir -p /talus/install
 
-sudo cp $DIR/../../slave/vm/prebootstrap.py /talus/install/
+if [ ! -d $DIR/../../talus-slave ]; then
+	echo "$DIR/../talus-slave does not exist."
+	echo "the talus-slave repository must be checked out alongside talus-master"
+	exit
+fi
+sudo cp $DIR/../../talus-slave/vm/prebootstrap.py /talus/install/
+
+if [ ! -d $DIR/../../docs ]; then
+	echo "$DIR/../docs does not exist."
+	echo "the docs repository must be checked out alongside talus-master"
+	exit
+fi
+
 cat << EOF | sudo tee /talus/install/IMAGE_SETUP_README.txt > /dev/null
 Requirements:
 =============
@@ -111,37 +123,7 @@ chmod -R o+rws /tmp/talus/tmp
 
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
-sudo apt-get install -y \
-	libvirt-bin \
-	qemu-kvm \
-	virtinst \
-	python-libvirt \
-	qemu-utils \
-	libxslt-dev \
-	libxml2-dev \
-	libvirt-dev \
-	libxml2-dev \
-	libdevmapper-dev \
-	libnl-dev \
-	libffi-dev \
-	build-essential \
-	ruby-dev \
-	python-pip \
-	python-dev \
-	libyajl* \
-	wget \
-	gcc make pkg-config libxml2-dev libgnutls-dev libdevmapper-dev libcurl4-gnutls-dev python-dev libpciaccess-dev libxen-dev libnl-dev libyajl-dev uuid-dev libpcap-dev xsltproc
-
-(mkdir -p /tmp/vagrant_install \
-	&& cd /tmp/vagrant_install \
-	&& wget https://releases.hashicorp.com/vagrant/1.8.5/vagrant_1.8.5_x86_64.deb \
-	&& sudo dpkg -i vagrant_1.8.5_x86_64.deb \
-	&& rm -rf /tmp/vagrant_install)
-
-vagrant plugin install vagrant-libvirt
-sudo pip install tabulate xmltodict mongoengine mock pymongo==2.8.0 sh pika docutils netifaces pip2pi
-
-$DIR/bin/install_vagrant
+$DIR/install_vagrant
 
 sudo pip install --upgrade pip
 sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi
