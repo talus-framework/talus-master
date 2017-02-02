@@ -126,7 +126,7 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 $DIR/install_vagrant
 
 sudo pip install --upgrade pip
-sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi
+sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi docutils
 
 echo "USER INPUT" 
 echo "USER INPUT" 
