@@ -1,0 +1,24 @@
+#!/bin/bash
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+tmpd=$(mktemp -d)
+
+(
+    cd "$tmpd"
+    virtio_rpm_url="https://fedorapeople.org/groups/virt/virtio-win/repo/stable/virtio-win-0.1.141-1.noarch.rpm"
+    echo "Downloading RPM containing virtio windows drivers from $virtio_rpm_url"
+
+    # cpio:
+    #  -i to extract the files
+    #  -d to create the leading directories
+    curl -s "$virtio_rpm_url" | rpm2cpio - | cpio -idv "*virtio-win*.iso"
+
+    virtio_path=$(find . -name "*virtio-win.iso")
+
+    # copy the iso into the current directory
+    cp "$virtio_path" ./$(basename "$virtio_path")
+)
+
+mv "$tmpd"/virtio-win.iso "$DIR"/../data/virtio-drivers.iso
+rm -rf "$tmpd"

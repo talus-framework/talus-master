@@ -29,12 +29,17 @@ class ResultWatcher(WatcherBase):
             if filename_ == "__init__.py":
                 continue
             mod_name = filename_.replace(".py", "")
-            mod = __import__(
-                "master.watchers.result_processors",
-                globals(),
-                locals(),
-                fromlist=[mod_name]
-            )
+
+            try:
+                mod = __import__(
+                    "master.watchers.result_processors",
+                    globals(),
+                    locals(),
+                    fromlist=[mod_name]
+                )
+            except ImportError as e:
+                self._log.warn("could not load processor '{!r}'".format(mod_name))
+                
             mod = getattr(mod, mod_name)
             for item_name in dir(mod):
                 item = getattr(mod, item_name)
@@ -65,8 +70,11 @@ class ResultWatcher(WatcherBase):
             try:
                 can_process = processor.can_process(result)
             except NotImplemented as e:
-                self._log.error("Result processor class '{}' does not implement the can_process function!".format(
-                    processor.__class__.__name__))
+                self._log.error(
+                    "Result processor class '{}' does not implement the can_process function!".format(
+                        processor.__class__.__name__
+                    )
+                )
                 continue
 
             if can_process:

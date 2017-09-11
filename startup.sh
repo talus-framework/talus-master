@@ -22,6 +22,21 @@ if [ -n "$BRIDGE_IF" ]; then
 	fi
 fi
 
+# Configure default group and ownership to set root/www-data to be default
+
+grep "^user.*=root$" /etc/libvirt/qemu.conf
+if [ $? -ne 0 ]; then
+    echo "user = \"root\"" >> /etc/libvirt/qemu.conf
+fi
+grep "^group.*=www-data$" /etc/libvirt/qemu.conf
+if [ $? -ne 0 ]; then
+    echo "group = \"www-data\"" >> /etc/libvirt/qemu.conf
+fi
+grep "^dynamic ownership.*=0$" /etc/libvirt/qemu.conf
+if [ $? -ne 0 ]; then
+    echo "dynamic_ownership = 1" >> /etc/libvirt/qemu.conf
+fi
+
 libvirtd -d
 
 python -m master

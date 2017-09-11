@@ -1,8 +1,8 @@
 #!/bin/bash
 
-DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-
-cd $DIR/../..
+REALPATH=$(readlink -f $0)
+REALDIR=$(dirname $REALPATH)
+cd $REALDIR/../../
 
 TALUS_DB_PORT_27017_TCP=tcp://$(sudo docker inspect --format '{{ .NetworkSettings.IPAddress }}' talus-db):27017
 TALUS_AMQP_PORT_5672_TCP=tcp://$(sudo docker inspect --format '{{ .NetworkSettings.IPAddress }}' talus-amqp):5672

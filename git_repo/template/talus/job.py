@@ -1,16 +1,21 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import ast
-import inspect
-import logging
-import re
 
+import ast
 import docutils
 import docutils.examples
-from talus.fileset import FileSet
+import inspect
+import logging
+import os
+import re
+import sys
+
 
 logging.basicConfig(level=logging.DEBUG)
+
+
+from talus.fileset import FileSet
 
 
 class TalusError(Exception):
@@ -37,7 +42,7 @@ class PyFuncTypeFileSet(object):
 class PyFuncTypeNative(object):
     def __init__(self, native_type):
         self.type = "native"
-        if native_type not in ["str", "list", "tuple", "dict", "int", "unicode"]:
+        if native_type not in ["str", "list", "tuple", "dict", "int", "float", "unicode", "bool"]:
             raise TalusError("Unsupported native type specified for parameter: {!r}".format(native_type))
         self.name = native_type
 
@@ -189,7 +194,6 @@ class Job(object):
         self._results_callback = results_callback
 
         self._log = logging.getLogger("JOB:{}".format(self._id))
-
     def add_file(self, contents, content_type="application/octet-stream", filename=None, **metadata):
         """Add a file to the default result fileset
         """
@@ -250,6 +254,13 @@ class Job(object):
 
         return real_params
 
+    def _to_bool(self, val):
+        if type(val) is bool:
+            return val
+        if type(val) is str:
+            return val.lower() == "true"
+        return not (not val)
+    
     def _convert_val(self, param_type, val):
         if param_type["type"] == "native":
             switch = {
@@ -260,6 +271,7 @@ class Job(object):
                 "int": lambda x: int(x),
                 "float": lambda x: float(x),
                 "unicode": lambda x: unicode(x)
+                "bool"    : self._to_bool,
             }
             return switch[param_type["name"]](val)
 
@@ -283,6 +295,7 @@ class Job(object):
     def _get_param_types(self, cls):
         cls_name = cls.__name__
         filename = inspect.getfile(cls)
+        filename = filename.replace(".pyc", ".py")
 
         with open(filename, "r") as f:
             source = f.read()

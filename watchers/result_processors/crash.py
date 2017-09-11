@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
+from StringIO import StringIO
 import gridfs
 import json
 import os
-from StringIO import StringIO
 import sys
 import tabulate
 import zipfile
 
+
 import master.watchers.result_processors as processors
 from master.models import *
+
 
 try:
     import master.watchers.result_processors.crash_task_maker as crash_task_maker
@@ -44,10 +47,17 @@ class CrashProcessor(processors.ResultProcessorBase):
         """
         self._log.info("processing crash")
 
-        if Result.objects(data__hash_major=result.data["hash_major"],
-                          data__hash_minor=result.data["hash_minor"]).count() > 50:
-            self._log.debug("removing unneeded crash result ({}:{} hash)".format(result.data["hash_major"],
-                                                                                 result.data["hash_minor"]))
+        result_set = Result.objects(
+            data__hash_major=result.data["hash_major"],
+            data__hash_minor=result.data["hash_minor"],
+        )
+        if result_set.count() > 50:
+            self._log.debug(
+                "removing unneeded crash result ({}:{} hash)".format(
+                    result.data["hash_major"],
+                    result.data["hash_minor"]
+                )
+            )
             self.delete_result(result)
             return
 
@@ -67,8 +77,8 @@ class CrashProcessor(processors.ResultProcessorBase):
             self.delete_result(result)
             return
 
-        if Result.objects(data__hash_major=result.data["hash_major"],
-                          data__hash_minor=result.data["hash_minor"]).count() == 1:
+        # means it's the first crash with this major/minor hash (i.e., a "new" crash)
+        if result_set.count() == 1:
             try:
                 crash_task_maker.create_crash_task(result)
             except:

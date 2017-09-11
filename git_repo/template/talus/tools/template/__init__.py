@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
+import os
+import sys
+
+
 from talus.components import Component
 
 

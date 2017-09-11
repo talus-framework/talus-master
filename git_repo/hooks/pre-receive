@@ -1,32 +1,28 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+from sh import git as git_
 import ast
 import datetime
+import docutils.examples
+import docutils.nodes
 import logging
+import os
+import pymongo
 import random
 import re
 import sys
 import traceback
 
-import docutils.examples
-import docutils.nodes
-import pymongo
-from sh import git as git_
-
 git = git_.bake(_tty_out=False)
-
 logging.basicConfig()
 
 CONN = pymongo.MongoClient("localhost", 27017)
 
 ERROR_MESSAGES = []
-
-
 def add_error_message(msg):
     global ERROR_MESSAGES
     ERROR_MESSAGES.append(msg)
-
 
 ERRORS = ["""
          ▌─────────────────────────▐█─────▐
@@ -143,7 +139,7 @@ class PyFuncTypeFileSet(object):
 class PyFuncTypeNative(object):
     def __init__(self, native_type):
         self.type = "native"
-        if native_type not in ["str", "list", "tuple", "dict", "int", "unicode", "float"]:
+        if native_type not in ["str", "list", "tuple", "dict", "int", "unicode", "float", "bool"]:
             raise TalusError("Unsupported native type specified for parameter: {!r}".format(native_type))
         self.name = native_type
 
@@ -310,11 +306,11 @@ class ChangeHandler(object):
             # The main Tool and Component definitions are only going
             # to be defined in the __init__.py file of the module,
             # e.g.
-            #
-            #	tools/
-            #		browser_fuzzer/
-            #			__init__.py <--- contains the BrowserFuzzer class
-            #			... supporting files ...
+            # 
+            #    tools/
+            #        browser_fuzzer/
+            #            __init__.py <--- contains the BrowserFuzzer class
+            #            ... supporting files ...
             #
             match = re.match(r'^talus/(tools|components)/(\w+)/__init__.py', filename)
             if match is None:

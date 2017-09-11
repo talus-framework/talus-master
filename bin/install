@@ -124,9 +124,10 @@ chmod -R o+rws /tmp/talus/tmp
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 $DIR/install_vagrant
+$DIR/fetch_virtio_iso
 
 sudo pip install --upgrade pip
-sudo pip install pymongo netifaces mongoengine pika xmltodict tabulate sh pip2pi docutils
+sudo pip install -r "$DIR"/requirements.txt
 
 echo "USER INPUT" 
 echo "USER INPUT" 
