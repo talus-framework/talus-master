@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
 import bson
 import logging
 import os
@@ -8,6 +9,7 @@ from sh import md5sum
 import sys
 import time
 import uuid
+
 
 import master.models
 from master.lib.vm.manage import VMManager
@@ -50,10 +52,11 @@ class VMWatcher(WatcherBase):
 
     def _handle_status(self, id_, obj=None, image=None):
         switch = {
-            "import": self._handle_import,
-            "configure": self._handle_configure,
-            "create": self._handle_create,
-            "delete": self._handle_delete
+            "import"     : self._handle_import,
+            "configure"  : self._handle_configure,
+            "create"     : self._handle_create,
+            "delete"     : self._handle_delete,
+            "iso-create" : self._handle_iso_create,
         }
 
         if image is None:
@@ -71,12 +74,64 @@ class VMWatcher(WatcherBase):
             vms.append(worker.get_vnc_info())
         return vms
 
+    def _handle_iso_create(self, id_, image):
+        """Handle creating a new VM from scratch using the iso provided in
+        the state object.
+        """
+        self._log.info("creating new image using iso")
+
+        iso_id = bson.ObjectId(image.status["iso"])
+        iso_file = master.models.TmpFile.objects(id=iso_id)[0]
+
+        if iso_file.path.startswith("/"):
+            iso_file.path = iso_file.path[1:]
+
+        iso_path = os.path.join("/tmp/talus", iso_file.path)
+        if not os.path.exists(iso_path):
+            self._log.warn("cannot locate iso {!r} for image {!r} creation".format(
+                iso_file.path,
+                image.name,
+            ))
+            iso_file.delete()
+            image.status = {
+                "name": "iso-create error",
+            }
+            image.save()
+            return
+
+        vnc_info = self._vm_manager.create_from_iso(
+            iso_path    = iso_path,
+            #vagrantfile = image.status.setdefault("vagrantfile", None),
+            image_name  = str(image.id),
+            username    = image.username,
+            password    = image.password,
+            on_success  = self._set_image_ready,
+        )
+
+        from master import Master
+        Master.instance().update_status(vms=self._get_running_vms())
+
+        if os.path.exists(iso_file.path):
+            os.remove(iso_file.path)
+        iso_file.delete()
+
+        image.status = {
+            "name": "configuring",
+            "vnc": vnc_info,
+        }
+        image.save()
+
+        self._log.info("new VM is starting up with iso {!r}, ready for initial configuration\n    {!r}".format(
+            os.path.basename(iso_path),
+            vnc_info,
+        ))
+
     def _handle_import(self, id_, image):
         """This is the initial step when importing an image from the API. The API
         will insert a new Image document into the database with status["name"] set to
         "importing"
         """
-        self._log.info("importing an image")
+        self._log.info("Importing image {}".format(image.id))
 
         image_to_import = bson.ObjectId(image.status["tmpfile"])
         tmp_file = master.models.TmpFile.objects(id=image_to_import)[0]
@@ -99,11 +154,11 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.import_image(
             image_path,
-            str(image.id),  # image name
-            user_interaction=True,
-            username=image.username,
-            password=image.password,
-            on_success=self._set_image_ready
+            str(image.id), # image name
+            user_interaction = True,
+            username         = image.username,
+            password         = image.password,
+            on_success       = self._set_image_ready
         )
 
         from master import Master
@@ -138,10 +193,10 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.configure_image(
             str(image.id),
-            vagrantfile=vagrantfile,
-            user_interaction=user_interaction,
-            on_success=self._set_image_ready,
-            kvm=image.status["kvm"]
+            vagrantfile      = vagrantfile,
+            user_interaction = user_interaction,
+            on_success       = self._set_image_ready,
+            kvm              = image.status["kvm"]
         )
         self._log.debug("got vnc info from configure image: {!r}".format(vnc_info))
 
@@ -168,10 +223,10 @@ class VMWatcher(WatcherBase):
 
         vnc_info = self._vm_manager.create_image(
             vagrantfile,
-            base_name=str(base.id),
-            dest_name=str(image.id),
-            user_interaction=user_interaction,
-            on_success=self._set_image_ready
+            base_name        = str(base.id),
+            dest_name        = str(image.id),
+            user_interaction = user_interaction,
+            on_success       = self._set_image_ready
         )
 
         from master import Master
@@ -222,8 +277,15 @@ class VMWatcher(WatcherBase):
 
         path = "/var/lib/libvirt/images/{}_vagrant_box_image_0.img".format(str(image.id))
         if not os.path.exists(path):
-            path = os.path.join(os.path.expanduser("~"), ".vagrant.d", "boxes", str(image.id), "0", "libvirt",
-                                "box.img")
+            path = os.path.join(
+                os.path.expanduser("~"),
+                ".vagrant.d",
+                "boxes",
+                str(image.id),
+                "0",
+                "libvirt",
+                "box.img"
+            )
 
         self._log.info("recalculating md5 of image found at {}".format(path))
 

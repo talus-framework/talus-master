@@ -6,10 +6,10 @@ from __future__ import absolute_import
 
 import json
 import os
+import sys
+import tempfile
 
-
-class MockJob(object
-              ):
+class MockJob(object):
     def __init__(self):
         self.files_dir = os.path.join(os.getcwd(), "TALUS_RUNLOCAL_FILESET")
         if not os.path.exists(self.files_dir):
@@ -26,7 +26,7 @@ class MockJob(object
             content_type=content_type,
         ))
         with open(local_filename + ".json", "wb") as f:
-            f.write(json.mps(metadata, indent=4, separators=(",", ": ")))
+            f.write(json.dumps(metadata, indent=4, separators=(",", ": ")))
 
         return local_filename
 
@@ -36,7 +36,6 @@ class MockJob(object
             if not os.path.exists(new_file):
                 return new_file
             self.file_counter += 1
-
 
 class TalusCodeBase(object):
     """The base class for Talus Tools and Components"""
@@ -51,7 +50,7 @@ class TalusCodeBase(object):
     def run(self, arg1):
         """The main function that will be run
 
-        :param arg1:
+        :arg1: TODO
         :returns: TODO
 
         """

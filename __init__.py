@@ -6,30 +6,72 @@
 
 from __future__ import absolute_import
 
+import colorama
 import datetime
 import glob
 import json
 import logging
 import netifaces
 import os
+import pymongo
 import signal
 import socket
 import sys
 import threading
 import time
+import traceback
 
 import master.models
-import master.watchers
-import pymongo
-from master.lib.amqp_man import AmqpManager
-from master.lib.mongo_oplog_watcher import OplogWatcher
 from master.models import *
 from master.models import Master as MasterModel
+from master.lib.mongo_oplog_watcher import OplogWatcher, OplogPrinter
+from master.lib.amqp_man import AmqpManager
+import master.watchers
 
 logging.basicConfig(
     level=logging.DEBUG,
 )
-logging.getLogger().handlers[0].setFormatter(logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s"))
+
+
+class TalusFormatter(logging.Formatter):
+    """Colorize the logs
+    """
+    def __init__(self):
+        logging.Formatter.__init__(self)
+
+    def format(self, record):
+        msg = "{time} {level:<8} {name:<12} {message}".format(
+            time    = self.formatTime(record),
+            level   = record.levelname,
+            name    = record.name,
+            message = record.getMessage()
+        )
+
+        # if the record has exc_info and it's not None, add it
+        # to the message
+        exc_info = getattr(record, "exc_info", None)
+        if exc_info is not None:
+            msg += "\n"
+            msg += "".join(traceback.format_exception(*exc_info))
+
+        color = ""
+        if record.levelno == logging.DEBUG:
+            color = colorama.Fore.BLUE
+        elif record.levelno == logging.WARNING:
+            color = colorama.Fore.YELLOW
+        elif record.levelno in [logging.ERROR, logging.CRITICAL, logging.FATAL]:
+            color = colorama.Fore.RED
+        elif record.levelno == logging.INFO:
+            color = colorama.Fore.WHITE
+
+        colorized = color + colorama.Style.BRIGHT + msg + colorama.Style.RESET_ALL
+
+        return colorized
+
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("sh").setLevel(logging.WARN)
+logging.getLogger().handlers[0].setFormatter(TalusFormatter())
 
 
 def _signal_handler(signum, frame):
@@ -122,7 +164,7 @@ class TalusDBWatcher(OplogWatcher):
 
         """
         # self._log.info("update for {}:{}".format(ns, id))
-        # self._log.debug("modification: {}".format(mod))
+        ##self._log.debug("modification: {}".format(mod))
 
         if ns in self._watchers:
             for watcher in self._watchers[ns]:
@@ -314,20 +356,26 @@ class Master(object):
         uuid = data["uuid"]
         # self._log.info("got slave status update message")
 
-        slaves = Slave.objects(uuid=uuid)
+        slaves = Slave.objects(hostname=data.setdefault("hostname", ""), uuid=uuid)
         if len(slaves) == 0:
             self._log.warn("got a slave status for a slave that isn't defined yet, making a new one")
+            self._handle_slave_new(data)
             return
+        else:
+            slave = slaves[0]
 
-        slave = slaves[0]
-        if "running_vms" in data:
-            slave.running_vms = data["running_vms"]
-
-        if "total_jobs_run" in data:
-            slave.total_jobs_run = data["total_jobs_run"]
-
-        if "vms" in data:
-            slave.vms = data["vms"]
+        attrs = [
+            "running_vms",
+            "total_jobs_run",
+            "vms",
+            "used_cpus",
+            "used_ram",
+            "max_cpus",
+            "max_ram",
+        ]
+        for attr in attrs:
+            if attr in data:
+                setattr(slave, attr, data[attr])
 
         slave.timestamps["modified"] = time.time()
         slave.save()
@@ -339,13 +387,15 @@ class Master(object):
         # these must be unique
         Slave.objects(
             # ip=data["ip"],
-            hostname=data["hostname"]
+            hostname=data.setdefault("hostname", "")
         ).delete()
 
         slave = Slave()
-        slave.max_vms = data["max_vms"]
-        slave.ip = data["ip"]
-        slave.hostname = data["hostname"]
+        slave.max_cpus = data.setdefault("max_cpus", 1)
+        slave.max_ram = data.setdefault("max_ram", 1)
+        slave.max_vms = data.setdefault("max_vms", 1)
+        slave.ip = data.setdefault("ip", "")
+        slave.hostname = data.setdefault("hostname", "")
         slave.uuid = data["uuid"]
         slave.timestamps["created"] = datetime.datetime.utcnow()
         slave.save()
@@ -354,6 +404,7 @@ class Master(object):
             json.dumps(dict(
                 type="config",
                 db=self._ip,
+                image_url="http://{}/images/".format(self._ip),
                 code=dict(
                     loc="http://{}/code_cache".format(self._ip),
 
@@ -361,7 +412,6 @@ class Master(object):
                     username="talus_job",
                     password="Monkeys eat bananas and poop all day."
                 ),
-                image_url="http://{}/images/".format(self._ip)
             )),
             self.AMQP_SLAVE_QUEUE + "_" + slave.uuid
         )

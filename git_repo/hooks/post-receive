@@ -21,5 +21,26 @@ do
 				pip2pi "$code_cache/talus/pypi" -r "$code_cache/$req"
 			fi
 		done
+
+        echo "recreating tar.gz of main subdirectories"
+		dirs=( $code_cache/talus/tools/* $code_cache/talus/components/* $code_cache/talus/packages/* )
+        for to_compress in ${dirs[@]}; do
+            to_compress_base=$(basename $to_compress)
+            # do this in a subshell
+            (
+                # go the parent directory of the directory we're
+                # going to compress
+                cd $(dirname "$to_compress")
+                compressed_path="$to_compress".tar.gz
+
+                # delete the old tar.gz file if it exists
+                if [ -f "$compressed_path" ] ; then
+                    rm -f "$compressed_path"
+                fi
+                
+                tar -czf "$compressed_path" "$to_compress_base" >/dev/null
+            )
+        done
+
 	fi
 done

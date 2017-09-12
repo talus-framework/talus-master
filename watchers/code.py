@@ -1,17 +1,23 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+from sh import git
+import bson
 import logging
 import os
 import re
+import sh
 import shutil
+import sys
 import tempfile
+import uuid
 
 import master.models
 from master.watchers import WatcherBase
-from sh import git
+
 
 logging.getLogger("sh").setLevel(logging.WARN)
+
 
 TALUS_GIT = "/talus/talus_code.git"
 

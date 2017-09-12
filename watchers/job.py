@@ -1,12 +1,30 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
+"""
+This module handles the processing of insertion, updates,
+and deletion of Job documents in the MongoDB database.
+"""
+
+
+import bson
+import os
+import sys
+import uuid
+
+
 import master.models
+import master.lib.webhooks as webhooks
 from master.lib.jobs import JobManager
 from master.watchers import WatcherBase
+from master.lib.amqp_man import AmqpManager
 
 
 class JobWatcher(WatcherBase):
+    """The watcher for the ``talus.job`` collection in the database.
+    """
+
     collection = "talus.job"
 
     def __init__(self, *args, **kwargs):
@@ -26,25 +44,44 @@ class JobWatcher(WatcherBase):
     def insert(self, id_, obj):
         self._log.debug("handling insert")
 
-        self._handle_status(id_, obj)
+        new_status=None
+        if "status" in obj and "name" in obj["status"]:
+            new_status = obj["status"]["name"]
+
+        self._handle_status(id_, obj, new_status=new_status)
 
     def update(self, id, mod):
         self._log.debug("handling update {} {}".format(id, mod))
 
-        self._handle_status(id, mod)
+        # if the status is being updated, fire off a new webhook
+        # status being modified should look like this:
+        # {'$set': {'status': {'name': 'running'}}}
+        #
+        # NOTE that _handle_status is intended to fire
+        if "$set" not in mod:
+            return
+        if "status" not in mod["$set"]:
+            return
+        if "name" not in mod["$set"]["status"]:
+            return
 
+        new_status = mod["$set"]["status"]["name"]
+        self._handle_status(id, mod, new_status=new_status)
+    
     def delete(self, id):
         self._log.debug("handling delete")
 
-    # self._handle_status(id)
+        #self._handle_status(id)
 
     # -----------------------
 
-    def _handle_status(self, id_, obj=None, job=None):
+    def _handle_status(self, id_, obj=None, job=None, new_status=None):
+        self._log.info("handling updated job status: {!r}".format(new_status))
+
         switch = {
-            "run": self._handle_run,
-            "stop": self._handle_stop,
-            "cancel": self._handle_cancel,
+            "run"    : self._handle_run,
+            "stop"   : self._handle_stop,
+            "cancel" : self._handle_cancel,
         }
 
         if job is None:
@@ -54,6 +91,12 @@ class JobWatcher(WatcherBase):
                 return
             job = jobs[0]
 
+        self._log.info("triggering webhook for job status change (job: {}, status: {!r})".format(
+            job.id,
+            new_status,
+        ))
+        webhooks.trigger("job", new_status, job)
+
         self._log.debug("_handle_status status is {}".format(job.status["name"]))
         if job.status["name"] in switch:
             switch[job.status["name"]](id_, job)
@@ -61,7 +104,7 @@ class JobWatcher(WatcherBase):
     def _handle_run(self, id_, job):
         """Handle running a job
         """
-        self._log.info("handling job runner")
+        self._log.info("handling job runnage")
 
         if job.image.status["name"] != "ready":
             self._log.warn("Image is not in a ready state! cannot run the job yet, cancelling")
